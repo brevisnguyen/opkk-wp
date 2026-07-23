@@ -1,0 +1,22 @@
+/* CrawlKK-specific overrides — shared crawl styles come from style.css */
+
+.crawlkk_wrap .crawl_page {
+    padding: 14px 14px;
+}
+
+#kk_list_crawl_success,
+#kk_list_crawl_error,
+#kk_schedule_log,
+#kk_result_list_movies {
+    margin: 10px 0;
+    width: 100%;
+}
+
+.crawlkk_main #kk_crawl_movies,
+.crawlkk_main #kk_get_list_movies {
+    display: inline-block;
+}
+
+.crawlkk_main #kk_crawl_movies {
+    display: none;
+}

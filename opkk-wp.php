@@ -1,10 +1,10 @@
 <?php
 /**
  * Plugin Name: OPKK WP
- * Description: OPKK WP — CMS xem phim cho WordPress (tương thích dữ liệu oPhim).
+ * Description: OPKK WP — Tương thích dữ liệu oPhim, KKPhim.
  * Version: 1.0.0
- * Author: OPhimCC
- * Author URI: https://ophim.cc
+ * Author: Brevis Nguyen
+ * Author URI: https://github.com/brevisnguyen/opkk-wp
  */
 if ( ! defined( 'WPINC' ) ) {
     die;

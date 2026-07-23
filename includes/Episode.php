@@ -1,5 +1,15 @@
 <?php
 
+/**
+ * Slug dùng trong URL /tap-{slug}-sv-{n}.
+ * Bỏ tiền tố tap- nếu name đã chứa "Tập" (slugify → tap-01) để tránh /tap-tap-01.
+ */
+function op_episode_url_slug($name)
+{
+    $slug = slugify($name);
+    return preg_replace('/^tap-+/', '', $slug);
+}
+
 function watchUrl(){
     $getslug = get_option('ophim_watch_urls');
     if($getslug){
@@ -12,7 +22,7 @@ function watchUrl(){
     $post_slug = basename(get_permalink(get_the_id()));;
     $listphim = get_post_meta(get_the_id(), 'ophim_episode_list', true);
     if (is_array($listphim)) {
-        $tapdau = slugify(reset(reset($listphim)['server_data'])['name']);
+        $tapdau = op_episode_url_slug(reset(reset($listphim)['server_data'])['name']);
          $episodeUrl = home_url("/") . $slugView . $post_slug . '/tap-' . $tapdau . '-sv-' . array_key_first($listphim);
          if(!$tapdau){
              return '';
@@ -59,7 +69,7 @@ function episodeName(){
     $checkUrl = explode("/", $wp->request);
     if(count($checkUrl) > 2) {
         $explode = explode("-sv-", $checkUrl[2]);
-        return str_replace('tap-', '', $explode[0]);
+        return preg_replace('/^(tap-)+/', '', $explode[0]);
     }
 }
 function episodeSV(){
@@ -78,7 +88,7 @@ function hrefEpisode($episode,$sv){
     }else{
         $slug = 'xem-phim';
     }
-    return home_url($slug."/" . basename(get_permalink(get_the_id()))) . '/tap-'. slugify($episode) . '-sv-' . $sv ;
+    return home_url($slug."/" . basename(get_permalink(get_the_id()))) . '/tap-'. op_episode_url_slug($episode) . '-sv-' . $sv ;
 }
 function nextEpisodeUrl(){
     return episodeUrl()['next'];
@@ -100,7 +110,7 @@ function episodeUrl(){
     $listphim = episodeList();
     $checkUrl = explode("/", $current_url);
     $explode = explode("-sv-", $checkUrl[2]);
-    $tap = str_replace('tap-','',$explode[0]);
+    $tap = preg_replace('/^(tap-)+/', '', $explode[0]);
     $sv = $explode[1];
     if (!isset($listphim[$sv])){
         return '';
@@ -109,7 +119,7 @@ function episodeUrl(){
     if($iframe){
         $keytap = null;
         foreach ($listphim[$sv]['server_data'] as $l=>$list){
-            if (slugify($list['name']) == $tap) {
+            if (op_episode_url_slug($list['name']) == $tap || slugify($list['name']) == $tap) {
                 $keytap = $l;
             }
         }
@@ -118,7 +128,7 @@ function episodeUrl(){
             $data['episode'] = $listphim[$sv]['server_data'][$keytap];
             $data['next'] = '';
             if(isset($listphim[$sv]['server_data'][$keytap+1])){
-                $next = home_url("/") . $slugView . $post_slug . '/tap-' . (slugify($listphim[$sv]['server_data'][$keytap+1]['name'])) . '-sv-' . $sv;
+                $next = home_url("/") . $slugView . $post_slug . '/tap-' . (op_episode_url_slug($listphim[$sv]['server_data'][$keytap+1]['name'])) . '-sv-' . $sv;
                 $data['next'] = $next;
             }
             return $data;

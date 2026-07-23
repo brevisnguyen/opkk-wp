@@ -1,12 +1,12 @@
 <h1>Xin chào</h1>
-<p>OPhim Core cho wordpress. CMS tạo website xem phim với nhiều giao diện đa dạng, dữ liệu phim miễn phí. Chỉ nên tải mã nguồn chính thức từ diễn đàn <a href="https://forum.ophim.cc/"> https://forum.ophim.cc/</a></p>
+<p>OPKK WP — CMS xem phim cho WordPress (tương thích dữ liệu oPhim).</p>
 <hr>
 <h2>Hướng dẫn sử dụng: </h2>
 <h3>Lỗi 404</h3>
 <p>Vào Cài đặt -> <a href="/wp-admin/options-permalink.php"> Đường dẫn tĩnh</a> -> Lưu</p>
 <h3>Thêm Menu</h3>
 <p>Vào Giao diện -> <a href="/wp-admin/nav-menus.php"> Menu</a> -> Tạo Primary Menu<p>
-    <p>Trên cùng bên phải -> Tùy chọn hiển thị -> Tích chọn danh mục của oPhim</p>
+    <p>Trên cùng bên phải -> Tùy chọn hiển thị -> Tích chọn danh mục của OPKK</p>
 <h3>Thêm widget</h3>
 <p>Vào Giao diện -> <a href="/wp-admin/widgets.php"> Widget</a> -> Kéo widget vào phần muốn hiển thị<p>
 <h3>Sửa logo</h3>

@@ -28,7 +28,7 @@ $tab = isset($_GET['tab']) ? $_GET['tab'] : $default_tab;
                                 </p>
                                 <p>
                                     Cấu hình crontab: <code><i style="color:blueviolet">*/10 * * * *</i> cd <i
-                                                style="color:blueviolet">/path/to/</i>wp-content/plugins/ophim-core/ &&
+                                                style="color:blueviolet">/path/to/</i>wp-content/plugins/opkk-wp/ &&
                                         php -q schedule.php <i style="color:blueviolet">{secret_key}</i></code>
                                 </p>
                                 <p>

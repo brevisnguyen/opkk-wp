@@ -44,7 +44,7 @@ class oFim_Backend
     public function menus()
     {
 
-        add_menu_page('OFim', 'Cài đặt oPhim', 'manage_options', $this->_menuSlug, array($this, 'dispatch_function'), '', 3);
+        add_menu_page('OPKK', 'Cài đặt OPKK', 'manage_options', $this->_menuSlug, array($this, 'dispatch_function'), '', 3);
         add_submenu_page($this->_menuSlug, 'Crawl', 'Crawl', 'manage_options', $this->_menuSlug . '-crawl', array($this, 'dispatch_function'));
         add_submenu_page($this->_menuSlug, 'CrawlKK', 'CrawlKK', 'manage_options', $this->_menuSlug . '-crawlkk', array($this, 'dispatch_function'));
         add_submenu_page($this->_menuSlug, 'CSS&JS', 'JWPlayer', 'manage_options', $this->_menuSlug . '-jwplayer', array($this, 'dispatch_function'));

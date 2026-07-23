@@ -115,7 +115,7 @@ function op_wordpress_logo() {
 ?>
 <style type="text/css">
     body.login div#login h1 a {
-        background-image: url(/wp-content/plugins/ophim-core/public/image/logo-ophim-6.png);
+        background-image: url(<?php echo OFIM_PLUGIN_URL; ?>public/image/logo-ophim-6.png);
     }
 </style>
 <?php }

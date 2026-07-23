@@ -25,6 +25,11 @@ define('OFIM_CACHE_DIR', OFIM_PLUGIN_PATCH . 'cache/');
 
 define('OFIM_PREFIX'  ,'OFIM_');
 
+// Version / update (PUC đọc Version: từ header plugin, không đọc OFIM_VERSION)
+define('OFIM_VERSION', '1.0.0');
+define('OFIM_PLUGIN_SLUG', 'opkk-wp');
+define('OFIM_GITHUB_REPO', 'https://github.com/brevisnguyen/opkk-wp');
+
 //OPHIM
 define('API_DOMAIN', 'https://ophim1.com');
 define('CRAWL_OPHIM_OPTION_SETTINGS', 'crawl_ophim_schedule_settings');

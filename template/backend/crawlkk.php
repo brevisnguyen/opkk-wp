@@ -33,7 +33,7 @@ if (file_exists(CRAWL_KK_PATH_SCHEDULE_JSON)) {
                                 </p>
                                 <p>
                                     Cấu hình crontab: <code><i style="color:blueviolet">*/10 * * * *</i> cd <i
-                                                style="color:blueviolet">/path/to/</i>wp-content/plugins/ophim-core/ &&
+                                                style="color:blueviolet">/path/to/</i>wp-content/plugins/opkk-wp/ &&
                                         php -q schedule_kk.php <i style="color:blueviolet">{secret_key}</i></code>
                                 </p>
                                 <p>

@@ -1,7 +1,7 @@
 <?php
 /**
- * Plugin Name: OPhim Core
- * Description: OPhim Core cho wordpress. CMS tạo website xem phim với nhiều giao diện đa dạng, dữ liệu phim miễn phí. Chỉ nên tải mã nguồn chính thức từ diễn đàn <a href="https://forum.ophim.cc/">https://forum.ophim.cc/</a>
+ * Plugin Name: OPKK WP
+ * Description: OPKK WP — CMS xem phim cho WordPress (tương thích dữ liệu oPhim).
  * Version: 1.0.0
  * Author: OPhimCC
  * Author URI: https://ophim.cc
@@ -10,6 +10,15 @@ if ( ! defined( 'WPINC' ) ) {
     die;
 }
 require_once 'define.php';
+
+require_once __DIR__ . '/lib/plugin-update-checker/plugin-update-checker.php';
+$ofimUpdateChecker = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
+    OFIM_GITHUB_REPO,
+    __FILE__,
+    OFIM_PLUGIN_SLUG
+);
+$ofimUpdateChecker->getVcsApi()->enableReleaseAssets('/\.zip($|[?&#])/i');
+
 require_once OFIM_HELPERS_PATCH.'/cache.php';
 require_once OFIM_HELPERS_PATCH.'/functions.php';
 require_once OFIM_INCLUDE_PATCH.'/Controller.php';

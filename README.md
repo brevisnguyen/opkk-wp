@@ -9,19 +9,33 @@ Cài đặt: Tải về và upload như WordPress plugin thông thường.
 **Quan trọng:** thư mục plugin trên server phải tên `opkk-wp` (file chính `opkk-wp.php`) để cơ chế cập nhật hoạt động đúng.
 Plugins khuyến nghị đi kèm: optimize, cache, SEO (tuỳ chọn).
 
-### Migrate từ ophim-core (site đã cài bản cũ)
+### Migrate từ ophim-core-wp-main (site đã cài bản cũ)
 
-1. Deactivate plugin cũ
-2. Đổi tên folder `wp-content/plugins/ophim-core` → `opkk-wp`
-3. Đảm bảo file chính là `opkk-wp.php` (đổi/xoá `ophim-core.php` cũ)
-4. Activate lại **OPKK WP**
+Bản OPKK WP có thêm file mới (CrawlKK, updater, …). **Không chỉ đổi tên folder** — cần thay cả bộ file plugin, giữ nguyên DB.
 
-Phim đã crawl giữ nguyên (`post_type=ophim` + meta/taxonomy cũ).
+1. **Backup** folder plugin cũ + database.
+2. **Deactivate** plugin cũ (OPhim Core / `ophim-core-wp-main`).
+3. Đổi tên hoặc xóa folder cũ (giữ backup), ví dụ:
+   ```text
+   wp-content/plugins/ophim-core-wp-main  →  ophim-core-wp-main-backup
+   ```
+4. **Upload bản mới** (`opkk-wp-x.y.z.zip` hoặc copy mã nguồn mới) vào:
+   ```text
+   wp-content/plugins/opkk-wp/
+   ```
+   Folder gốc phải là `opkk-wp`, file chính `opkk-wp.php`. Không activate đồng thời cả folder cũ và mới.
+5. **Activate** plugin **OPKK WP**.
+6. Vào **Cài đặt → Đường dẫn tĩnh → Lưu** (tránh 404).
+7. Kiểm tra: menu **Cài đặt OPKK**, Crawl / CrawlKK, danh sách phim cũ, 1–2 phim xem/episode bình thường.
+8. Nếu dùng cron: cập nhật path
+   ```text
+   .../plugins/ophim-core-wp-main/  →  .../plugins/opkk-wp/
+   ```
+   rồi vào tab **Tự động** bật lại schedule / kiểm tra secret key nếu cần (`schedule.json` trong bản mới thường `enable: false`).
 
-## III - Ghi chú
-Các giao diện sẽ được tách riêng và đăng vào cùng post giao diện của cms (Có tag wordpress): https://forum.ophim.cc/t/wordpress-cms
+Phim đã crawl **giữ nguyên** (`post_type=ophim` + meta/taxonomy cũ trong DB). Không cần re-crawl chỉ vì migrate.
 
-## IV - Cập nhật qua GitHub Releases
+## III - Cập nhật qua GitHub Releases
 
 Plugin dùng [Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-checker) để kiểm tra bản mới từ GitHub Releases (repo public).
 

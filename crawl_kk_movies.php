@@ -1,5 +1,14 @@
 <?php
 
+function kk_swap_thumb_poster(&$sourcePage)
+{
+    if (isset($sourcePage['movie']['thumb_url'], $sourcePage['movie']['poster_url'])) {
+        $temp = $sourcePage['movie']['thumb_url'];
+        $sourcePage['movie']['thumb_url'] = $sourcePage['movie']['poster_url'];
+        $sourcePage['movie']['poster_url'] = $temp;
+    }
+}
+
 function crawl_kk_page_handle($url)
 {
     $sourcePage = file_get_contents($url);
@@ -91,6 +100,7 @@ function crawl_kk_movies_handle($url, $ophim_id, $ophim_update_time, $filterType
 
                 $sourcePage = file_get_contents($url);
                 $sourcePage = json_decode($sourcePage, true);
+                kk_swap_thumb_poster($sourcePage);
                 $data = create_data($sourcePage, $url, $ophim_id, $ophim_update_time);
 
                 $status = getStatus($data['status']);
@@ -145,6 +155,7 @@ function crawl_kk_movies_handle($url, $ophim_id, $ophim_update_time, $filterType
 
         $sourcePage = file_get_contents($url);
         $sourcePage = json_decode($sourcePage, true);
+        kk_swap_thumb_poster($sourcePage);
         $data = create_data($sourcePage, $url, $ophim_id, $ophim_update_time, $filterType, $filterCategory, $filterCountry);
 
         if (!empty($data['crawl_filter'])) {

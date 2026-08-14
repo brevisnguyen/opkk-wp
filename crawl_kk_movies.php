@@ -121,8 +121,8 @@ function crawl_kk_movies_handle($url, $ophim_id, $ophim_update_time, $filterType
                 update_post_meta($post_id, 'ophim_lang', $data['lang']);
                 update_post_meta($post_id, 'ophim_showtime_movies', $data['showtime']);
                 $updatepost = array(
-                    'post_modified' => date(),
-                    'post_modified_gmt' => date(),
+                    'post_modified' => current_time('mysql'),
+                    'post_modified_gmt' => current_time('mysql', 1),
                     'ID' => $post_id,
                 );
                 wp_update_post($updatepost);

@@ -16,7 +16,8 @@ require_once CRAWL_OPHIM_PATH . 'helpers/functions.php';
 require_once CRAWL_OPHIM_PATH . 'crawl_movies.php';
 
 if (php_sapi_name() !== 'cli') exit('CLI only');
-if (!isset($argv[1]) || $argv[1] != get_option(CRAWL_KK_OPTION_SECRET_KEY, 'secret_key')) exit("Invalid secret key\n");
+// Secret key khác nhau theo từng site; chạy hàng loạt thì đặt OPKK_SKIP_KEY=1
+if (getenv('OPKK_SKIP_KEY') !== '1' && (!isset($argv[1]) || $argv[1] != get_option(CRAWL_KK_OPTION_SECRET_KEY, 'secret_key'))) exit("Invalid secret key\n");
 
 $dry_run = in_array('--dry-run', $argv, true);
 $limit = 0;
@@ -29,15 +30,39 @@ $thumb_w = (int)oIsset($settings, 'crawl_resize_size_thumb_w', 0);
 $thumb_h = (int)oIsset($settings, 'crawl_resize_size_thumb_h', 0);
 $is_webp_default = oIsset($settings, 'crawl_convert_webp', 'off') == 'on';
 
-// Kiểm tra URL/đường dẫn thumb có mở được không
-function fm_thumb_exists($value)
+// Kiểm tra song song nhiều URL ngoài bằng curl_multi; trả về [url => bool]
+function fm_check_urls(array $urls, $concurrency = 30)
 {
-    if (!$value) return false;
-    if (preg_match('#^https?://#i', $value)) {
-        $res = wp_remote_head($value, ['timeout' => 15, 'redirection' => 3]);
-        return !is_wp_error($res) && wp_remote_retrieve_response_code($res) == 200;
+    $result = [];
+    $urls = array_values(array_unique($urls));
+    foreach (array_chunk($urls, $concurrency) as $chunk) {
+        $mh = curl_multi_init();
+        $handles = [];
+        foreach ($chunk as $url) {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_NOBODY => true,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_MAXREDIRS => 3,
+                CURLOPT_CONNECTTIMEOUT => 5,
+                CURLOPT_TIMEOUT => 10,
+            ]);
+            curl_multi_add_handle($mh, $ch);
+            $handles[$url] = $ch;
+        }
+        do {
+            curl_multi_exec($mh, $running);
+            if ($running) curl_multi_select($mh, 1);
+        } while ($running);
+        foreach ($handles as $url => $ch) {
+            $result[$url] = curl_getinfo($ch, CURLINFO_RESPONSE_CODE) == 200;
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+        }
+        curl_multi_close($mh);
     }
-    return file_exists(ABSPATH . ltrim($value, '/'));
+    return $result;
 }
 
 // Lấy nội dung ảnh poster (file local hoặc URL)
@@ -83,21 +108,41 @@ function fm_build_thumb($binary, $dest, $w, $h)
     return !is_wp_error($saved);
 }
 
-$ids = get_posts([
-    'post_type' => 'ophim',
-    'post_status' => 'any',
-    'posts_per_page' => -1,
-    'fields' => 'ids',
-    'meta_key' => 'ophim_thumb_url',
-]);
+// Một query lấy toàn bộ id + thumb + poster (thay vì get_post_meta từng bài)
+global $wpdb;
+$rows = $wpdb->get_results("
+    SELECT p.ID AS id, t.meta_value AS thumb, po.meta_value AS poster
+    FROM {$wpdb->posts} p
+    JOIN {$wpdb->postmeta} t ON t.post_id = p.ID AND t.meta_key = 'ophim_thumb_url'
+    LEFT JOIN {$wpdb->postmeta} po ON po.post_id = p.ID AND po.meta_key = 'ophim_poster_url'
+    WHERE p.post_type = 'ophim' AND p.post_status <> 'auto-draft'
+");
 
-$checked = $missing = $fixed = $failed = 0;
-foreach ($ids as $post_id) {
-    $thumb = get_post_meta($post_id, 'ophim_thumb_url', true);
-    $poster = get_post_meta($post_id, 'ophim_poster_url', true);
-    $checked++;
+// Pha 1: file local -> file_exists (nhanh); URL ngoài gom lại kiểm tra song song
+$todo = [];
+$urls = [];
+foreach ($rows as $row) {
+    $thumb = $row->thumb;
+    if (!$thumb) {
+        $todo[] = $row;
+    } elseif (preg_match('#^https?://#i', $thumb)) {
+        $urls[] = $thumb;
+    } elseif (!file_exists(ABSPATH . ltrim($thumb, '/'))) {
+        $todo[] = $row;
+    }
+}
+$url_ok = fm_check_urls($urls);
+foreach ($rows as $row) {
+    if ($row->thumb && preg_match('#^https?://#i', $row->thumb) && empty($url_ok[$row->thumb])) $todo[] = $row;
+}
 
-    if (fm_thumb_exists($thumb)) continue;
+// Pha 2: chỉ xử lý các bài thiếu thumb
+$checked = count($rows);
+$missing = $fixed = $failed = 0;
+foreach ($todo as $row) {
+    $post_id = (int)$row->id;
+    $thumb = $row->thumb;
+    $poster = $row->poster;
     $missing++;
 
     if ($limit && $missing > $limit) break;

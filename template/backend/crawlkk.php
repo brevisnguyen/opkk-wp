@@ -112,6 +112,19 @@ if (file_exists(CRAWL_KK_PATH_SCHEDULE_JSON)) {
                 $crawl_kk_settings = json_decode(get_option(CRAWL_KK_OPTION_SETTINGS, '[]'));
                 ?>
                 <div class="crawl_main crawlkk_main">
+                    <div class="crawl_page postbox">
+                        <div class="inside">
+                            <b>Crawl một phim theo slug</b>
+                            <p>
+                                <input type="text" id="kk_single_slug" placeholder="vd: dich-nhan-kiet-bat-tu-quan" style="width: 50%">
+                                <label><input type="checkbox" id="kk_single_force"> Cập nhật lại dù phim không có thay đổi</label>
+                                <button id="kk_single_crawl" type="button" class="button button-primary">Crawl phim</button>
+                            </p>
+                            <div id="kk_single_msg" style="display: none" class="notice"><p id="kk_single_msg_text"></p></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="crawl_main crawlkk_main">
                     <div class="crawl_filter notice notice-info">
                         <div class="filter_title"><strong>Bỏ qua định dạng</strong></div>
                         <div class="filter_item">

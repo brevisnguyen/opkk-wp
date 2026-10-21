@@ -30,7 +30,43 @@ $thumb_w = (int)oIsset($settings, 'crawl_resize_size_thumb_w', 0);
 $thumb_h = (int)oIsset($settings, 'crawl_resize_size_thumb_h', 0);
 $is_webp_default = oIsset($settings, 'crawl_convert_webp', 'off') == 'on';
 
-// Kiểm tra song song nhiều URL ngoài bằng curl_multi; trả về [url => bool]
+// Nhận diện ảnh thật qua magic bytes (JPEG/PNG/GIF/WEBP/AVIF); loại bỏ file rỗng, trang lỗi HTML/text
+function fm_is_image_bytes($b)
+{
+    if (!is_string($b) || strlen($b) < 12) return false;
+    if (substr($b, 0, 3) === "\xFF\xD8\xFF") return true;                 // JPEG
+    if (substr($b, 0, 8) === "\x89PNG\r\n\x1a\n") return true;            // PNG
+    if (substr($b, 0, 4) === 'GIF8') return true;                         // GIF
+    if (substr($b, 0, 4) === 'RIFF' && substr($b, 8, 4) === 'WEBP') return true; // WEBP
+    if (substr($b, 4, 4) === 'ftyp') return true;                         // AVIF/HEIF
+    return false;
+}
+
+// Đường dẫn tương đối (/wp-content/...) nếu giá trị là đường dẫn local hoặc URL thuộc chính domain site; ngược lại null
+function fm_local_rel($v)
+{
+    if (!is_string($v) || $v === '') return null;
+    if (preg_match('#^https?://#i', $v)) {
+        $host = parse_url($v, PHP_URL_HOST);
+        if (!$host || strcasecmp($host, parse_url(home_url(), PHP_URL_HOST)) !== 0) return null;
+        $v = parse_url($v, PHP_URL_PATH) ?: '';
+    }
+    return ($v !== '' && $v[0] === '/' && strpos($v, '..') === false) ? $v : null;
+}
+
+// File local có phải ảnh thật không (đọc 16 byte đầu)
+function fm_local_image_ok($rel)
+{
+    $path = ABSPATH . ltrim($rel, '/');
+    if (!is_file($path) || filesize($path) < 12) return false;
+    $fh = @fopen($path, 'rb');
+    if (!$fh) return false;
+    $head = fread($fh, 16);
+    fclose($fh);
+    return fm_is_image_bytes($head);
+}
+
+// Kiểm tra song song nhiều URL ngoài bằng curl_multi (tải 16 byte đầu để kiểm tra magic bytes); trả về [url => bool]
 function fm_check_urls(array $urls, $concurrency = 30)
 {
     $result = [];
@@ -38,27 +74,31 @@ function fm_check_urls(array $urls, $concurrency = 30)
     foreach (array_chunk($urls, $concurrency) as $chunk) {
         $mh = curl_multi_init();
         $handles = [];
-        foreach ($chunk as $url) {
+        $bufs = [];
+        foreach ($chunk as $i => $url) {
+            $bufs[$i] = '';
             $ch = curl_init($url);
             curl_setopt_array($ch, [
-                CURLOPT_NOBODY => true,
-                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_RANGE => '0-15',
                 CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_MAXREDIRS => 3,
                 CURLOPT_CONNECTTIMEOUT => 5,
                 CURLOPT_TIMEOUT => 10,
+                CURLOPT_WRITEFUNCTION => function ($c, $data) use (&$bufs, $i) {
+                    if (strlen($bufs[$i]) < 16) $bufs[$i] .= $data;
+                    return strlen($data);
+                },
             ]);
             curl_multi_add_handle($mh, $ch);
-            $handles[$url] = $ch;
+            $handles[$i] = $ch;
         }
         do {
             curl_multi_exec($mh, $running);
             if ($running) curl_multi_select($mh, 1);
         } while ($running);
-        foreach ($handles as $url => $ch) {
-            // 200 nhưng Content-Length = 0 là file rỗng (ảnh trắng), coi như hỏng
-            $result[$url] = curl_getinfo($ch, CURLINFO_RESPONSE_CODE) == 200
-                && curl_getinfo($ch, CURLINFO_CONTENT_LENGTH_DOWNLOAD) != 0;
+        foreach ($handles as $i => $ch) {
+            $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            $result[$chunk[$i]] = ($code == 200 || $code == 206) && fm_is_image_bytes(substr($bufs[$i], 0, 16));
             curl_multi_remove_handle($mh, $ch);
             curl_close($ch);
         }
@@ -78,8 +118,8 @@ function fm_valid_image_source($v)
     return $v[0] === '/' && strpos($v, '..') === false;
 }
 
-// Lấy nội dung ảnh từ poster trong DB; nếu hỏng thì thử poster/thumb từ API (ophim_fetch_info_url)
-function fm_load_source_image($post_id, $poster, &$used)
+// Danh sách nguồn ảnh: poster trong DB, rồi poster/thumb từ API (ophim_fetch_info_url)
+function fm_source_candidates($post_id, $poster)
 {
     $candidates = [];
     if (fm_valid_image_source($poster)) $candidates[] = $poster;
@@ -94,22 +134,18 @@ function fm_load_source_image($post_id, $poster, &$used)
             }
         }
     }
-    foreach ($candidates as $src) {
-        $bin = fm_get_poster_binary($src);
-        if ($bin) {
-            $used = $src;
-            return $bin;
-        }
-    }
-    return null;
+    return $candidates;
 }
 
-// Lấy nội dung ảnh poster (file local hoặc URL)
+// Lấy nội dung ảnh (file local hoặc URL); chỉ trả về nếu đúng là dữ liệu ảnh
 function fm_get_poster_binary($poster)
 {
-    if (!preg_match('#^https?://#i', $poster)) {
-        $path = ABSPATH . ltrim($poster, '/');
-        return file_exists($path) ? file_get_contents($path) : null;
+    $rel = fm_local_rel($poster);
+    if ($rel !== null) {
+        $path = ABSPATH . ltrim($rel, '/');
+        $bin = is_file($path) ? file_get_contents($path) : null;
+        if ($bin !== null && fm_is_image_bytes(substr($bin, 0, 16))) return $bin;
+        if (!preg_match('#^https?://#i', $poster)) return null; // đường dẫn local hỏng: thử nguồn khác
     }
     // Link http:// trong DB thường chỉ mở được qua https:// -> thử https trước, rồi mới tới link gốc
     $urls = [];
@@ -123,7 +159,7 @@ function fm_get_poster_binary($poster)
         ]);
         if (!is_wp_error($res) && wp_remote_retrieve_response_code($res) == 200) {
             $body = wp_remote_retrieve_body($res);
-            if ($body !== '') return $body;
+            if (fm_is_image_bytes(substr($body, 0, 16))) return $body;
         }
     }
     return null;
@@ -139,9 +175,13 @@ function fm_build_thumb($binary, $dest, $w, $h)
     }
     // File tạm đặt trong thư mục tạm của hệ thống, giữ đuôi ảnh để WP nhận đúng định dạng
     $tmp = wp_tempnam('opkk-thumb') . '.' . strtolower(pathinfo($dest, PATHINFO_EXTENSION));
-    if (@file_put_contents($tmp, $binary) === false) return false;
+    if (@file_put_contents($tmp, $binary) === false) {
+        echo "  -> không ghi được file tạm: $tmp\n";
+        return false;
+    }
     $editor = wp_get_image_editor($tmp);
     if (is_wp_error($editor)) {
+        echo "  -> không mở được ảnh nguồn: " . $editor->get_error_message() . "\n";
         @unlink($tmp);
         return false;
     }
@@ -159,7 +199,11 @@ function fm_build_thumb($binary, $dest, $w, $h)
     $mime = strtolower(pathinfo($dest, PATHINFO_EXTENSION)) === 'webp' ? 'image/webp' : 'image/jpeg';
     $saved = $editor->save($dest, $mime);
     @unlink($tmp);
-    return !is_wp_error($saved);
+    if (is_wp_error($saved)) {
+        echo "  -> không lưu được ảnh: " . $saved->get_error_message() . "\n";
+        return false;
+    }
+    return true;
 }
 
 // Một query lấy toàn bộ id + thumb + poster (thay vì get_post_meta từng bài)
@@ -172,22 +216,26 @@ $rows = $wpdb->get_results("
     WHERE p.post_type = 'ophim' AND p.post_status <> 'auto-draft'
 ");
 
-// Pha 1: file local -> file_exists (nhanh); URL ngoài gom lại kiểm tra song song
+// Pha 1: file local -> kiểm tra magic bytes (nhanh); URL ngoài gom lại kiểm tra song song
 $todo = [];
 $urls = [];
 foreach ($rows as $row) {
     $thumb = $row->thumb;
     if (!$thumb) {
         continue; // thumb null trong DB là chủ đích, không tự tạo
+    }
+    $rel = fm_local_rel($thumb);
+    if ($rel !== null) {
+        if (!fm_local_image_ok($rel)) $todo[] = $row; // thiếu, rỗng hoặc không phải ảnh
     } elseif (preg_match('#^https?://#i', $thumb)) {
         $urls[] = $thumb;
-    } elseif (!file_exists(ABSPATH . ltrim($thumb, '/')) || filesize(ABSPATH . ltrim($thumb, '/')) === 0) {
+    } else {
         $todo[] = $row;
     }
 }
 $url_ok = fm_check_urls($urls);
 foreach ($rows as $row) {
-    if ($row->thumb && preg_match('#^https?://#i', $row->thumb) && empty($url_ok[$row->thumb])) $todo[] = $row;
+    if ($row->thumb && fm_local_rel($row->thumb) === null && preg_match('#^https?://#i', $row->thumb) && empty($url_ok[$row->thumb])) $todo[] = $row;
 }
 
 // Pha 2: chỉ xử lý các bài thiếu thumb
@@ -207,29 +255,36 @@ foreach ($todo as $row) {
         continue;
     }
 
-    $used = null;
-    $binary = fm_load_source_image($post_id, $poster, $used);
-    if (!$binary) {
-        echo "  -> cannot load any source image (poster: " . ($poster ?: '(empty)') . ")\n";
-        $failed++;
-        continue;
-    }
-    if ($used !== $poster) echo "  -> dùng ảnh nguồn từ API: $used\n";
-
-    // Giữ nguyên đường dẫn thumb cũ nếu là file local; ngược lại tạo tên mới trong uploads
-    if ($thumb && !preg_match('#^https?://#i', $thumb) && strpos($thumb, '..') === false) {
-        $dest = ABSPATH . ltrim($thumb, '/');
+    // Đích: giữ nguyên đường dẫn thumb cũ nếu thuộc site này; ngược lại tạo tên mới trong uploads
+    $rel = fm_local_rel($thumb);
+    $webp_ok = wp_image_editor_supports(['mime_type' => 'image/webp']);
+    if ($rel !== null && ($webp_ok || strtolower(pathinfo($rel, PATHINFO_EXTENSION)) !== 'webp')) {
+        $dest = ABSPATH . ltrim($rel, '/');
         $new_meta = $thumb;
     } else {
         $dirs = wp_upload_dir();
-        $ext = $is_webp_default ? 'webp' : 'jpg';
+        $ext = ($is_webp_default && $webp_ok) ? 'webp' : 'jpg';
         $name = sanitize_title(get_the_title($post_id)) . "-$post_id-thumb.$ext";
         $dest = $dirs['path'] . '/' . $name;
         $new_meta = str_replace(get_site_url(), '', $dirs['url'] . '/' . $name);
     }
 
-    if (!fm_build_thumb($binary, $dest, $thumb_w, $thumb_h)) {
-        echo "  -> crop failed\n";
+    // Thử lần lượt từng nguồn ảnh cho tới khi tạo được thumb
+    $built = false;
+    foreach (fm_source_candidates($post_id, $poster) as $src) {
+        $binary = fm_get_poster_binary($src);
+        if (!$binary) {
+            echo "  -> nguồn không phải ảnh hợp lệ / không tải được: $src\n";
+            continue;
+        }
+        if (fm_build_thumb($binary, $dest, $thumb_w, $thumb_h)) {
+            if ($src !== $poster) echo "  -> dùng ảnh nguồn: $src\n";
+            $built = true;
+            break;
+        }
+    }
+    if (!$built) {
+        echo "  -> không tạo được thumb (poster: " . ($poster ?: '(empty)') . ")\n";
         $failed++;
         continue;
     }

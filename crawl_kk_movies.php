@@ -75,6 +75,50 @@ function crawl_kk_movies()
     die();
 }
 
+add_action('wp_ajax_crawl_kk_single', 'crawl_kk_single');
+function crawl_kk_single()
+{
+    if (!current_user_can('manage_options')) {
+        wp_send_json(['status' => false, 'msg' => 'Không đủ quyền']);
+    }
+    // Chấp nhận slug hoặc link đầy đủ (lấy phần cuối của đường dẫn)
+    $slug = trim((string) oIsset($_POST, 'slug', ''));
+    $slug = basename(parse_url($slug, PHP_URL_PATH) ?: $slug);
+    $slug = sanitize_title($slug);
+    $force = oIsset($_POST, 'force', '') === '1';
+    if ($slug === '') {
+        wp_send_json(['status' => false, 'msg' => 'Slug không hợp lệ']);
+    }
+
+    $url = API_DOMAIN_KK . '/phim/' . $slug;
+    $res = wp_remote_get($url, ['timeout' => 30]);
+    if (is_wp_error($res) || wp_remote_retrieve_response_code($res) != 200) {
+        wp_send_json(['status' => false, 'msg' => "Không lấy được dữ liệu từ API: $url"]);
+    }
+    $json = json_decode(wp_remote_retrieve_body($res), true);
+    $movie = $json['movie'] ?? null;
+    if (empty($movie['_id'])) {
+        wp_send_json(['status' => false, 'msg' => "Không tìm thấy phim với slug: $slug"]);
+    }
+    $real_time = $movie['modified']['time'] ?? '';
+
+    // Ép cập nhật: dùng mốc thời gian giả để bỏ qua kiểm tra "không có gì mới", sau đó trả lại mốc thật
+    $result = crawl_kk_movies_handle($url, $movie['_id'], $force ? 'force-update' : $real_time, [], [], []);
+    $decoded = json_decode($result, true);
+    if ($force && !empty($decoded['post_id'])) {
+        update_post_meta($decoded['post_id'], 'ophim_fetch_ophim_update_time', $real_time);
+    }
+    if (is_array($decoded) && !empty($decoded['post_id'])) {
+        $decoded['title'] = get_the_title($decoded['post_id']);
+        $decoded['edit_link'] = get_edit_post_link($decoded['post_id'], 'raw');
+        $decoded['data'] = null; // không trả về dữ liệu lớn cho trình duyệt
+        if (empty($decoded['msg'])) {
+            $decoded['msg'] = ($decoded['list_episode'] ?? '') === 'Add new' ? 'Đã thêm phim mới' : 'Đã cập nhật phim';
+        }
+    }
+    wp_send_json($decoded ?: ['status' => false, 'msg' => 'Phản hồi không hợp lệ']);
+}
+
 function crawl_kk_movies_handle($url, $ophim_id, $ophim_update_time, $filterType, $filterCategory, $filterCountry)
 {
     try {

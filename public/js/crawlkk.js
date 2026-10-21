@@ -303,4 +303,48 @@ jQuery(function ($) {
             },
         });
     });
+
+    // Crawl một phim theo slug
+    $("#kk_single_crawl").on("click", function () {
+        const slug = $("#kk_single_slug").val().trim();
+        const box = $("#kk_single_msg");
+        const text = $("#kk_single_msg_text");
+        const btn = $(this);
+        const show = (cls, html) => {
+            box.removeClass("notice-success notice-error notice-info").addClass(cls).show(200);
+            text.html(html);
+        };
+        if (!slug) {
+            show("notice-error", "Hãy nhập slug của phim");
+            return;
+        }
+        btn.prop("disabled", true);
+        show("notice-info", "Đang crawl: <b></b>");
+        text.find("b").text(slug);
+        $.ajax({
+            url: ajaxurl,
+            type: "POST",
+            dataType: "json",
+            data: {
+                action: "crawl_kk_single",
+                slug: slug,
+                force: $("#kk_single_force").is(":checked") ? "1" : "0",
+            },
+            success: function (data) {
+                if (data && data.status) {
+                    const link = data.edit_link ? ` <a href="${data.edit_link}" target="_blank">Mở bài viết</a>` : "";
+                    const title = $("<span>").text(data.title || "").html();
+                    show("notice-success", `${title ? "<b>" + title + "</b> - " : ""}${$("<span>").text(data.msg || "Crawl thành công").html()}${link}`);
+                } else {
+                    show("notice-error", $("<span>").text((data && data.msg) || "Crawl lỗi").html());
+                }
+            },
+            error: function () {
+                show("notice-error", "Lỗi kết nối hoặc server trả về lỗi");
+            },
+            complete: function () {
+                btn.prop("disabled", false);
+            },
+        });
+    });
 });

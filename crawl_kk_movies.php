@@ -2,6 +2,12 @@
 
 function kk_swap_thumb_poster(&$sourcePage)
 {
+    if (isset($sourcePage['movie']) && array_key_exists('thumb_url', $sourcePage['movie']) && empty($sourcePage['movie']['thumb_url']) && !empty($sourcePage['movie']['poster_url'])) {
+        // KK has no thumb: reuse poster_url for both slots, the swapped-in one gets cropped
+        $sourcePage['movie']['thumb_url'] = $sourcePage['movie']['poster_url'];
+        $sourcePage['movie']['poster_crop'] = true;
+        return;
+    }
     if (isset($sourcePage['movie']['thumb_url'], $sourcePage['movie']['poster_url'])) {
         $temp = $sourcePage['movie']['thumb_url'];
         $sourcePage['movie']['thumb_url'] = $sourcePage['movie']['poster_url'];

@@ -255,6 +255,7 @@ function create_data($sourcePage, $url, $ophim_id, $ophim_update_time, $filterTy
         'org_title' => $sourcePage["movie"]["origin_name"],
         'thumbnail' => $sourcePage["movie"]["thumb_url"],
         'poster' => $sourcePage["movie"]["poster_url"],
+        'poster_crop' => !empty($sourcePage["movie"]["poster_crop"]),
         'trailer_url' => $sourcePage["movie"]["trailer_url"],
         'episode' => $sourcePage["movie"]["episode_current"],
         'total_episode' => $sourcePage["movie"]["episode_total"],
@@ -383,7 +384,9 @@ function download_resize_poster($data, $post_id, $crawl_settings)
                     'poster',
                     oIsset($crawl_settings, 'crawl_resize_size_poster_w', 0),
                     oIsset($crawl_settings, 'crawl_resize_size_poster_h', 0),
-                    $convert_webp
+                    $convert_webp,
+                    false,
+                    !empty($data['poster_crop'])
                 );
                 $poster_image_url = str_replace(get_site_url(), '', $res['url']);
             }
@@ -393,7 +396,7 @@ function download_resize_poster($data, $post_id, $crawl_settings)
     return $poster_image_url;
 }
 
-function save_images($image_url, $post_id, $posttitle, $suffix, $max_w, $max_h, $is_webp = false, $set_thumb = false)
+function save_images($image_url, $post_id, $posttitle, $suffix, $max_w, $max_h, $is_webp = false, $set_thumb = false, $crop = false)
 {
     // Khởi tạo curl để tải về hình ảnh
     $ch = curl_init($image_url);
@@ -412,6 +415,18 @@ function save_images($image_url, $post_id, $posttitle, $suffix, $max_w, $max_h, 
         $image_path = $res['file'];
         $editor = wp_get_image_editor($image_path);
         if (!is_wp_error($editor)) {
+            if ($crop && $max_w > 0 && $max_h > 0) {
+                // center-crop to target aspect ratio (portrait), then resize
+                $size = $editor->get_size();
+                $target = $max_w / $max_h;
+                if ($size['width'] / $size['height'] > $target) {
+                    $cw = (int) round($size['height'] * $target);
+                    $editor->crop((int) (($size['width'] - $cw) / 2), 0, $cw, $size['height']);
+                } else {
+                    $ch_ = (int) round($size['width'] / $target);
+                    $editor->crop(0, (int) (($size['height'] - $ch_) / 2), $size['width'], $ch_);
+                }
+            }
             $editor->resize($max_w, $max_h, false);
             $editor->save($image_path, $is_webp ? 'image/webp' : 'image/jpeg');
         }

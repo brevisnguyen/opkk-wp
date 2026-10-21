@@ -31,14 +31,15 @@ class oFim_Backend
 
     public function css()
     {
-        wp_enqueue_style('admin_css', OFIM_CSS_URL . '/style.css', false, '');
+        wp_enqueue_style('admin_css', OFIM_CSS_URL . '/style.css', false, OFIM_VERSION);
     }
 
     public function css_crawlkk()
     {
-        wp_enqueue_style('admin_css', OFIM_CSS_URL . '/style.css', false, '');
-        wp_enqueue_style('crawlkk_css', OFIM_CSS_URL . '/crawlkk.css', array('admin_css'), '');
-        wp_enqueue_script('crawlkk_js', OFIM_JS_URL . '/crawlkk.js', array('jquery'), null, false);
+        // Gắn version để trình duyệt/Cloudflare tải lại JS/CSS mỗi lần cập nhật plugin
+        wp_enqueue_style('admin_css', OFIM_CSS_URL . '/style.css', false, OFIM_VERSION);
+        wp_enqueue_style('crawlkk_css', OFIM_CSS_URL . '/crawlkk.css', array('admin_css'), OFIM_VERSION);
+        wp_enqueue_script('crawlkk_js', OFIM_JS_URL . '/crawlkk.js', array('jquery'), OFIM_VERSION, false);
     }
 
     public function menus()

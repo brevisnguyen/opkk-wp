@@ -121,7 +121,7 @@ function ophim_include_myuploadscript()
         wp_enqueue_media();
     }
     wp_enqueue_style('admin_csss', OFIM_PUBLIC_URL . '/css/admin.style.min.css?ver=2.5.5', false, '');
-    wp_enqueue_script('admin_js', OFIM_JS_URL . '/script.js', array('jquery'), null, false);
+    wp_enqueue_script('admin_js', OFIM_JS_URL . '/script.js', array('jquery'), OFIM_VERSION, false);
 }
 
 add_action('admin_enqueue_scripts', 'ophim_include_myuploadscript');

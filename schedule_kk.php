@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/helpers/drop-root.php';
 require_once __DIR__ . '/../../../wp-load.php';
 require_once __DIR__ . '/../../../wp-admin/includes/taxonomy.php';
 require_once __DIR__ . '/../../../wp-admin/includes/image.php';

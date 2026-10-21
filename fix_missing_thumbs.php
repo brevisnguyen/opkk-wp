@@ -6,6 +6,7 @@
  * Chạy CLI:
  *   php fix_missing_thumbs.php <secret_key> [--dry-run] [--limit=N]
  */
+require_once __DIR__ . '/helpers/drop-root.php';
 require_once __DIR__ . '/../../../wp-load.php';
 require_once __DIR__ . '/../../../wp-admin/includes/image.php';
 require_once __DIR__ . '/../../../wp-admin/includes/file.php';

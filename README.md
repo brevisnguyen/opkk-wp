@@ -31,7 +31,7 @@ Bản OPKK WP có thêm file mới (CrawlKK, updater, …). **Không chỉ đổ
    ```text
    .../plugins/ophim-core-wp-main/  →  .../plugins/opkk-wp/
    ```
-   rồi vào tab **Tự động** bật lại schedule / kiểm tra secret key nếu cần (`schedule_kk.json` trong bản mới thường `enable: false`).
+   rồi vào tab **Tự động** bật lại schedule / kiểm tra secret key nếu cần (`schedule_kk.json` trong bản mới luôn `enable: true`).
 
 Phim đã crawl **giữ nguyên** (`post_type=ophim` + meta/taxonomy cũ trong DB). Không cần re-crawl chỉ vì migrate.
 
@@ -61,7 +61,7 @@ chmod +x bin/build-release.sh
 # → dist/opkk-wp-1.1.0.zip
 ```
 
-Script loại `.git`, `.cursor`, `cache/*`, `bin/`, v.v. và đặt `schedule_kk.json` về `{"enable":false}`.
+Script loại `.git`, `.cursor`, `cache/*`, `bin/`, v.v. và đặt `schedule_kk.json` về `{"enable":true}`.
 
 4. Tạo GitHub Release:
    - Tag: `v1.1.0` (PUC lấy remote version từ tag, tự bỏ tiền tố `v`)

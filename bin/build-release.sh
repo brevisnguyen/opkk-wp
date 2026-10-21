@@ -47,13 +47,8 @@ if [[ -f "$ROOT/cache/.gitignore" ]]; then
   cp "$ROOT/cache/.gitignore" "$STAGE/cache/.gitignore"
 fi
 
-# Safe defaults for schedule flags in release packages
-if [[ -f "$STAGE/schedule.json" ]]; then
-  printf '%s\n' '{"enable":false}' > "$STAGE/schedule.json"
-fi
-if [[ -f "$STAGE/schedule_kk.json" ]]; then
-  printf '%s\n' '{"enable":false}' > "$STAGE/schedule_kk.json"
-fi
+# KK schedule is always enabled in release packages
+printf '%s\n' '{"enable":true}' > "$STAGE/schedule_kk.json"
 
 (
   cd "$OUT_DIR"

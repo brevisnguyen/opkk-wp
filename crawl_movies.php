@@ -410,7 +410,7 @@ function download_resize_thumb($data, $post_id, $crawl_settings)
                 true,
                 $crop
             );
-            $thumb_image_url = str_replace(get_site_url(), '', $res_thumb['url']);
+            if (!empty($res_thumb['url'])) $thumb_image_url = str_replace(get_site_url(), '', $res_thumb['url']);
         }
     } catch (Exception $e) {
     }
@@ -435,7 +435,7 @@ function download_resize_poster($data, $post_id, $crawl_settings)
                     oIsset($crawl_settings, 'crawl_resize_size_poster_h', 0),
                     $convert_webp
                 );
-                $poster_image_url = str_replace(get_site_url(), '', $res['url']);
+                if (!empty($res['url'])) $poster_image_url = str_replace(get_site_url(), '', $res['url']);
             }
         }
     } catch (Exception $e) {
@@ -450,9 +450,15 @@ function save_images($image_url, $post_id, $posttitle, $suffix, $max_w, $max_h, 
     curl_setopt($ch, CURLOPT_HEADER, false);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
     curl_setopt($ch, CURLOPT_BINARYTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // link http:// thường redirect sang https://
+    curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
     curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
     $file = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     curl_close($ch);
+
+    // Tải lỗi/rỗng/không phải 200 thì không tạo file (sẽ thành ảnh trắng)
+    if (!$file || $http_code != 200) return ['error' => 'download failed', 'file' => '', 'url' => ''];
 
     $postname = sanitize_title($posttitle);
     $file_extension = $is_webp ? 'webp' : 'jpg';

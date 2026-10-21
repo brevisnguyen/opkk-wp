@@ -56,13 +56,52 @@ function fm_check_urls(array $urls, $concurrency = 30)
             if ($running) curl_multi_select($mh, 1);
         } while ($running);
         foreach ($handles as $url => $ch) {
-            $result[$url] = curl_getinfo($ch, CURLINFO_RESPONSE_CODE) == 200;
+            // 200 nhưng Content-Length = 0 là file rỗng (ảnh trắng), coi như hỏng
+            $result[$url] = curl_getinfo($ch, CURLINFO_RESPONSE_CODE) == 200
+                && curl_getinfo($ch, CURLINFO_CONTENT_LENGTH_DOWNLOAD) != 0;
             curl_multi_remove_handle($mh, $ch);
             curl_close($ch);
         }
         curl_multi_close($mh);
     }
     return $result;
+}
+
+// Giá trị ảnh hợp lệ: đường dẫn local (/...) hoặc URL có host (loại bỏ "http://" rỗng, v.v.)
+function fm_valid_image_source($v)
+{
+    if (!is_string($v) || trim($v) === '') return false;
+    if (preg_match('#^https?://#i', $v)) {
+        $host = parse_url($v, PHP_URL_HOST);
+        return !empty($host) && strpos($host, '.') !== false;
+    }
+    return $v[0] === '/' && strpos($v, '..') === false;
+}
+
+// Lấy nội dung ảnh từ poster trong DB; nếu hỏng thì thử poster/thumb từ API (ophim_fetch_info_url)
+function fm_load_source_image($post_id, $poster, &$used)
+{
+    $candidates = [];
+    if (fm_valid_image_source($poster)) $candidates[] = $poster;
+    $api = get_post_meta($post_id, 'ophim_fetch_info_url', true);
+    if ($api && preg_match('#^https?://#i', $api)) {
+        $res = wp_remote_get($api, ['timeout' => 20]);
+        if (!is_wp_error($res) && wp_remote_retrieve_response_code($res) == 200) {
+            $json = json_decode(wp_remote_retrieve_body($res), true);
+            foreach (['poster_url', 'thumb_url'] as $k) {
+                $v = $json['movie'][$k] ?? null;
+                if (fm_valid_image_source($v) && !in_array($v, $candidates, true)) $candidates[] = $v;
+            }
+        }
+    }
+    foreach ($candidates as $src) {
+        $bin = fm_get_poster_binary($src);
+        if ($bin) {
+            $used = $src;
+            return $bin;
+        }
+    }
+    return null;
 }
 
 // Lấy nội dung ảnh poster (file local hoặc URL)
@@ -72,12 +111,22 @@ function fm_get_poster_binary($poster)
         $path = ABSPATH . ltrim($poster, '/');
         return file_exists($path) ? file_get_contents($path) : null;
     }
-    $res = wp_remote_get($poster, [
-        'timeout' => 30,
-        'user-agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-    ]);
-    if (is_wp_error($res) || wp_remote_retrieve_response_code($res) != 200) return null;
-    return wp_remote_retrieve_body($res);
+    // Link http:// trong DB thường chỉ mở được qua https:// -> thử https trước, rồi mới tới link gốc
+    $urls = [];
+    if (stripos($poster, 'http://') === 0) $urls[] = 'https://' . substr($poster, 7);
+    $urls[] = $poster;
+    foreach ($urls as $url) {
+        $res = wp_remote_get($url, [
+            'timeout' => 30,
+            'redirection' => 5,
+            'user-agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        ]);
+        if (!is_wp_error($res) && wp_remote_retrieve_response_code($res) == 200) {
+            $body = wp_remote_retrieve_body($res);
+            if ($body !== '') return $body;
+        }
+    }
+    return null;
 }
 
 // Crop căn giữa poster về tỉ lệ thumb, lưu vào $dest
@@ -132,7 +181,7 @@ foreach ($rows as $row) {
         continue; // thumb null trong DB là chủ đích, không tự tạo
     } elseif (preg_match('#^https?://#i', $thumb)) {
         $urls[] = $thumb;
-    } elseif (!file_exists(ABSPATH . ltrim($thumb, '/'))) {
+    } elseif (!file_exists(ABSPATH . ltrim($thumb, '/')) || filesize(ABSPATH . ltrim($thumb, '/')) === 0) {
         $todo[] = $row;
     }
 }
@@ -153,19 +202,19 @@ foreach ($todo as $row) {
     if ($limit && $missing > $limit) break;
     echo "[#$post_id] missing thumb: " . ($thumb ?: '(empty)') . "\n";
 
-    if (!$poster) {
-        echo "  -> no poster_url, skip\n";
-        $failed++;
+    if ($dry_run) {
+        if (!fm_valid_image_source($poster)) echo "  -> poster không hợp lệ: " . ($poster ?: '(empty)') . " (sẽ thử lấy từ API)\n";
         continue;
     }
-    if ($dry_run) continue;
 
-    $binary = fm_get_poster_binary($poster);
+    $used = null;
+    $binary = fm_load_source_image($post_id, $poster, $used);
     if (!$binary) {
-        echo "  -> cannot load poster: $poster\n";
+        echo "  -> cannot load any source image (poster: " . ($poster ?: '(empty)') . ")\n";
         $failed++;
         continue;
     }
+    if ($used !== $poster) echo "  -> dùng ảnh nguồn từ API: $used\n";
 
     // Giữ nguyên đường dẫn thumb cũ nếu là file local; ngược lại tạo tên mới trong uploads
     if ($thumb && !preg_match('#^https?://#i', $thumb) && strpos($thumb, '..') === false) {

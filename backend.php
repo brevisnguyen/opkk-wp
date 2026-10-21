@@ -12,7 +12,7 @@ class oFim_Backend
         if (isset($_GET['page'])) $this->_page = $_GET['page'];
         add_action('admin_menu', array($this, 'menus'));
         if (isset($_GET['page'])) {
-            if ($_GET['page'] == 'ofim-manager-crawl' || $_GET['page'] == 'ofim-manager-css-js') {
+            if ($_GET['page'] == 'ofim-manager-css-js') {
                 add_action('admin_enqueue_scripts', array($this, 'css'));
             }
             if ($_GET['page'] == 'ofim-manager-crawlkk') {
@@ -45,7 +45,6 @@ class oFim_Backend
     {
 
         add_menu_page('OPKK', 'Cài đặt OPKK', 'manage_options', $this->_menuSlug, array($this, 'dispatch_function'), '', 3);
-        add_submenu_page($this->_menuSlug, 'Crawl', 'Crawl', 'manage_options', $this->_menuSlug . '-crawl', array($this, 'dispatch_function'));
         add_submenu_page($this->_menuSlug, 'CrawlKK', 'CrawlKK', 'manage_options', $this->_menuSlug . '-crawlkk', array($this, 'dispatch_function'));
         add_submenu_page($this->_menuSlug, 'CSS&JS', 'JWPlayer', 'manage_options', $this->_menuSlug . '-jwplayer', array($this, 'dispatch_function'));
         add_submenu_page($this->_menuSlug, 'CSS&JS', 'CSS&JS', 'manage_options', $this->_menuSlug . '-css-js', array($this, 'dispatch_function'));
@@ -56,10 +55,6 @@ class oFim_Backend
     {
         $page = $this->_page;
         global $oController;
-        if ($page == 'ofim-manager-crawl') {
-            $obj = $oController->getController('AdminCrawl', '/backend');
-            $obj->display();
-        }
         if ($page == 'ofim-manager-crawlkk') {
             $obj = $oController->getController('AdminCrawlKK', '/backend');
             $obj->display();

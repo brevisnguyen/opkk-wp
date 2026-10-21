@@ -129,16 +129,7 @@ function crawl_ophim_movies_handle($url, $ophim_id, $ophim_update_time, $filterT
 
                 // Check & Update Image
                 $crawl_settings = json_decode(get_option(CRAWL_OPHIM_OPTION_SETTINGS, false));
-                $ophim_thumb_url = get_post_meta($post_id, 'ophim_thumb_url', true);
-                $ophim_poster_url = get_post_meta($post_id, 'ophim_poster_url', true);
-                if(!file_exists(ABSPATH . $ophim_thumb_url)) {
-                    $thumb_image_url = download_resize_thumb($data, $post_id, $crawl_settings);
-                    if($thumb_image_url != $ophim_thumb_url)  update_post_meta($post_id, 'ophim_thumb_url', $thumb_image_url);
-                }
-                if(!file_exists(ABSPATH . $ophim_poster_url)) {
-                    $poster_image_url = download_resize_poster($data, $post_id, $crawl_settings);
-                    if($poster_image_url != $ophim_poster_url) update_post_meta($post_id, 'ophim_poster_url', $poster_image_url);
-                }
+                refresh_post_images($data, $post_id, $crawl_settings);
 
                 // Re-Update Episodes
                 $list_episode = get_list_episode($sourcePage, $post->ID);
@@ -255,7 +246,7 @@ function create_data($sourcePage, $url, $ophim_id, $ophim_update_time, $filterTy
         'org_title' => $sourcePage["movie"]["origin_name"],
         'thumbnail' => $sourcePage["movie"]["thumb_url"],
         'poster' => $sourcePage["movie"]["poster_url"],
-        'poster_crop' => !empty($sourcePage["movie"]["poster_crop"]),
+        'thumb_crop' => !empty($sourcePage["movie"]["thumb_crop"]),
         'trailer_url' => $sourcePage["movie"]["trailer_url"],
         'episode' => $sourcePage["movie"]["episode_current"],
         'total_episode' => $sourcePage["movie"]["episode_total"],
@@ -320,8 +311,8 @@ function add_posts($data)
     update_post_meta($post_id, 'ophim_fetch_info_url', $data['fetch_url']);
     update_post_meta($post_id, 'ophim_fetch_ophim_id', $data['fetch_ophim_id']);
     update_post_meta($post_id, 'ophim_fetch_ophim_update_time', $data['fetch_ophim_update_time']);
-    update_post_meta($post_id, 'ophim_thumb_url', $thumb_image_url);
-    update_post_meta($post_id, 'ophim_poster_url', $poster_image_url);
+    save_image_meta($post_id, 'ophim_thumb_url', $thumb_image_url);
+    save_image_meta($post_id, 'ophim_poster_url', $poster_image_url);
     update_post_meta($post_id, 'ophim_original_title', $data['org_title']);
     update_post_meta($post_id, 'ophim_trailer_url', $data['trailer_url']);
     update_post_meta($post_id, 'ophim_runtime', $data['duration']);
@@ -348,12 +339,67 @@ function add_posts($data)
     return $post_id;
 }
 
+// Xoá ảnh cũ (attachment + file) sau khi đã có ảnh mới thay thế
+function delete_old_image($old, $new)
+{
+    if (empty($old) || $old === $new || preg_match('#^https?://#i', $old)) return;
+    $attach_id = attachment_url_to_postid(get_site_url() . $old);
+    if ($attach_id) {
+        wp_delete_attachment($attach_id, true);
+    } elseif (strpos($old, '..') === false && strpos($old, '/wp-content/uploads/') === 0 && file_exists(ABSPATH . ltrim($old, '/'))) {
+        @unlink(ABSPATH . ltrim($old, '/'));
+    }
+}
+
+// Tải lại thumb & poster khi cập nhật phim. API trả null thì giữ ảnh hiện có.
+function refresh_post_images($data, $post_id, $crawl_settings)
+{
+    $old_thumb = get_post_meta($post_id, 'ophim_thumb_url', true);
+    $old_poster = get_post_meta($post_id, 'ophim_poster_url', true);
+
+    $new_thumb = download_resize_thumb($data, $post_id, $crawl_settings);
+    if ($new_thumb !== null) {
+        save_image_meta($post_id, 'ophim_thumb_url', $new_thumb);
+        delete_old_image($old_thumb, $new_thumb);
+    } elseif (empty($old_thumb)) {
+        save_image_meta($post_id, 'ophim_thumb_url', null);
+    }
+
+    $new_poster = download_resize_poster($data, $post_id, $crawl_settings);
+    if ($new_poster !== null) {
+        save_image_meta($post_id, 'ophim_poster_url', $new_poster);
+        delete_old_image($old_poster, $new_poster);
+    } elseif (empty($old_poster)) {
+        save_image_meta($post_id, 'ophim_poster_url', null);
+    }
+}
+
+// Lưu meta ảnh; giá trị rỗng/null được lưu NULL trong DB
+function save_image_meta($post_id, $meta_key, $value)
+{
+    global $wpdb;
+    $is_null = ($value === null || $value === '');
+    update_post_meta($post_id, $meta_key, $is_null ? '' : $value);
+    if ($is_null) {
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$wpdb->postmeta} SET meta_value = NULL WHERE post_id = %d AND meta_key = %s",
+            $post_id,
+            $meta_key
+        ));
+        wp_cache_delete($post_id, 'post_meta');
+    }
+}
+
 function download_resize_thumb($data, $post_id, $crawl_settings)
 {
+    // API trả về null/rỗng thì giữ null, không tải ảnh
+    if (empty($data['thumbnail'])) return null;
     $thumb_image_url = $data['thumbnail'];
     $convert_webp = oIsset($crawl_settings, 'crawl_convert_webp', 'off') == 'on' ? true : false;
     try {
-        if (oIsset($crawl_settings, 'crawl_resize_size_thumb', 'off') == 'on') {
+        $crop = !empty($data['thumb_crop']);
+        // Thumb tạo từ poster cần crop thì luôn tải về xử lý, kể cả khi tắt resize
+        if (oIsset($crawl_settings, 'crawl_resize_size_thumb', 'off') == 'on' || $crop) {
             $res_thumb = save_images(
                 $data['thumbnail'],
                 $post_id, $data['title'],
@@ -361,7 +407,8 @@ function download_resize_thumb($data, $post_id, $crawl_settings)
                 oIsset($crawl_settings, 'crawl_resize_size_thumb_w', 0),
                 oIsset($crawl_settings, 'crawl_resize_size_thumb_h', 0),
                 $convert_webp,
-                true
+                true,
+                $crop
             );
             $thumb_image_url = str_replace(get_site_url(), '', $res_thumb['url']);
         }
@@ -372,6 +419,8 @@ function download_resize_thumb($data, $post_id, $crawl_settings)
 
 function download_resize_poster($data, $post_id, $crawl_settings)
 {
+    // API trả về null/rỗng thì giữ null, không tải ảnh
+    if (empty($data['poster'])) return null;
     $poster_image_url = $data['poster'];
     $convert_webp = oIsset($crawl_settings, 'crawl_convert_webp', 'off') == 'on' ? true : false;
     try {
@@ -384,9 +433,7 @@ function download_resize_poster($data, $post_id, $crawl_settings)
                     'poster',
                     oIsset($crawl_settings, 'crawl_resize_size_poster_w', 0),
                     oIsset($crawl_settings, 'crawl_resize_size_poster_h', 0),
-                    $convert_webp,
-                    false,
-                    !empty($data['poster_crop'])
+                    $convert_webp
                 );
                 $poster_image_url = str_replace(get_site_url(), '', $res['url']);
             }
@@ -415,10 +462,10 @@ function save_images($image_url, $post_id, $posttitle, $suffix, $max_w, $max_h, 
         $image_path = $res['file'];
         $editor = wp_get_image_editor($image_path);
         if (!is_wp_error($editor)) {
-            if ($crop && $max_w > 0 && $max_h > 0) {
-                // center-crop to target aspect ratio (portrait), then resize
+            if ($crop) {
+                // crop căn giữa theo tỉ lệ w/h (mặc định 2:3 dọc), rồi resize nếu có kích thước
                 $size = $editor->get_size();
-                $target = $max_w / $max_h;
+                $target = ($max_w > 0 && $max_h > 0) ? $max_w / $max_h : 2 / 3;
                 if ($size['width'] / $size['height'] > $target) {
                     $cw = (int) round($size['height'] * $target);
                     $editor->crop((int) (($size['width'] - $cw) / 2), 0, $cw, $size['height']);
@@ -426,8 +473,10 @@ function save_images($image_url, $post_id, $posttitle, $suffix, $max_w, $max_h, 
                     $ch_ = (int) round($size['width'] / $target);
                     $editor->crop(0, (int) (($size['height'] - $ch_) / 2), $size['width'], $ch_);
                 }
+                if ($max_w > 0 && $max_h > 0) $editor->resize($max_w, $max_h, false);
+            } else {
+                $editor->resize($max_w, $max_h, false);
             }
-            $editor->resize($max_w, $max_h, false);
             $editor->save($image_path, $is_webp ? 'image/webp' : 'image/jpeg');
         }
         insert_attachment($res['file'], $post_id, $set_thumb);

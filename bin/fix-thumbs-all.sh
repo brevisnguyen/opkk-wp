@@ -6,7 +6,8 @@
 #   ./bin/fix-thumbs-all.sh /var/www --execute       # sửa thật
 # Biến môi trường:
 #   PARALLEL=4     số site chạy song song (mặc định 4)
-#   RUN_AS=www-data  user chạy PHP, để file ảnh mới đúng owner (cần chạy bằng sudo)
+#   RUN_AS=user    user chạy PHP (cần chạy bằng sudo). Mặc định: tự lấy owner của từng site
+#                  (aaPanel thường là 'www', Ubuntu/Debian thường là 'www-data')
 #   PHP_BIN=php
 set -euo pipefail
 
@@ -25,8 +26,12 @@ run_one() {
   site="$(echo "$script" | sed -E 's#/wp-content/plugins/opkk-wp/fix_missing_thumbs.php$##; s#^.*/##')"
   log="$LOG_DIR/$site.log"
   cmd=("$PHP_BIN" "$script" skip "$MODE")
-  if [[ -n "$RUN_AS" ]]; then
-    sudo -u "$RUN_AS" -E "${cmd[@]}" >"$log" 2>&1 || true
+  user="$RUN_AS"
+  if [[ -z "$user" ]]; then
+    user="$(stat -c %U "$script" 2>/dev/null || stat -f %Su "$script")"
+  fi
+  if [[ "$(id -un)" != "$user" ]]; then
+    sudo -u "$user" env OPKK_SKIP_KEY=1 "${cmd[@]}" >"$log" 2>&1 || true
   else
     "${cmd[@]}" >"$log" 2>&1 || true
   fi

@@ -84,8 +84,13 @@ function fm_get_poster_binary($poster)
 function fm_build_thumb($binary, $dest, $w, $h)
 {
     wp_mkdir_p(dirname($dest));
-    $tmp = $dest . '.tmp';
-    file_put_contents($tmp, $binary);
+    if (!is_dir(dirname($dest)) || !is_writable(dirname($dest))) {
+        echo "  -> thư mục không ghi được (sai owner/quyền?): " . dirname($dest) . "\n";
+        return false;
+    }
+    // File tạm đặt trong thư mục tạm của hệ thống, giữ đuôi ảnh để WP nhận đúng định dạng
+    $tmp = wp_tempnam('opkk-thumb') . '.' . strtolower(pathinfo($dest, PATHINFO_EXTENSION));
+    if (@file_put_contents($tmp, $binary) === false) return false;
     $editor = wp_get_image_editor($tmp);
     if (is_wp_error($editor)) {
         @unlink($tmp);
@@ -124,7 +129,7 @@ $urls = [];
 foreach ($rows as $row) {
     $thumb = $row->thumb;
     if (!$thumb) {
-        $todo[] = $row;
+        continue; // thumb null trong DB là chủ đích, không tự tạo
     } elseif (preg_match('#^https?://#i', $thumb)) {
         $urls[] = $thumb;
     } elseif (!file_exists(ABSPATH . ltrim($thumb, '/'))) {

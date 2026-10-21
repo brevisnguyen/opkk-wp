@@ -2,17 +2,32 @@
 
 function kk_swap_thumb_poster(&$sourcePage)
 {
-    if (isset($sourcePage['movie']) && array_key_exists('thumb_url', $sourcePage['movie']) && empty($sourcePage['movie']['thumb_url']) && !empty($sourcePage['movie']['poster_url'])) {
-        // KK has no thumb: reuse poster_url for both slots, the swapped-in one gets cropped
-        $sourcePage['movie']['thumb_url'] = $sourcePage['movie']['poster_url'];
-        $sourcePage['movie']['poster_crop'] = true;
+    if (!isset($sourcePage['movie'])) return;
+    $movie = &$sourcePage['movie'];
+    $thumb = $movie['thumb_url'] ?? null;
+    $poster = $movie['poster_url'] ?? null;
+
+    // Thiếu một trong hai thì dùng ảnh còn lại; thiếu cả hai thì giữ null
+    if (empty($thumb) && empty($poster)) {
+        $movie['thumb_url'] = null;
+        $movie['poster_url'] = null;
         return;
     }
-    if (isset($sourcePage['movie']['thumb_url'], $sourcePage['movie']['poster_url'])) {
-        $temp = $sourcePage['movie']['thumb_url'];
-        $sourcePage['movie']['thumb_url'] = $sourcePage['movie']['poster_url'];
-        $sourcePage['movie']['poster_url'] = $temp;
+    if (empty($thumb)) {
+        // Thumb lấy từ poster -> ảnh thumb cần crop; poster giữ nguyên
+        $movie['thumb_url'] = $poster;
+        $movie['poster_url'] = $poster;
+        $movie['thumb_crop'] = true;
+        return;
     }
+    if (empty($poster)) {
+        $movie['thumb_url'] = $thumb;
+        $movie['poster_url'] = $thumb;
+        return;
+    }
+    // Hoán đổi thumb <-> poster
+    $movie['thumb_url'] = $poster;
+    $movie['poster_url'] = $thumb;
 }
 
 function crawl_kk_page_handle($url)
@@ -134,16 +149,7 @@ function crawl_kk_movies_handle($url, $ophim_id, $ophim_update_time, $filterType
                 wp_update_post($updatepost);
 
                 $crawl_settings = json_decode(get_option(CRAWL_KK_OPTION_SETTINGS, false));
-                $ophim_thumb_url = get_post_meta($post_id, 'ophim_thumb_url', true);
-                $ophim_poster_url = get_post_meta($post_id, 'ophim_poster_url', true);
-                if (!file_exists(ABSPATH . $ophim_thumb_url)) {
-                    $thumb_image_url = download_resize_thumb($data, $post_id, $crawl_settings);
-                    if ($thumb_image_url != $ophim_thumb_url) update_post_meta($post_id, 'ophim_thumb_url', $thumb_image_url);
-                }
-                if (!file_exists(ABSPATH . $ophim_poster_url)) {
-                    $poster_image_url = download_resize_poster($data, $post_id, $crawl_settings);
-                    if ($poster_image_url != $ophim_poster_url) update_post_meta($post_id, 'ophim_poster_url', $poster_image_url);
-                }
+                refresh_post_images($data, $post_id, $crawl_settings);
 
                 $list_episode = get_list_episode($sourcePage, $post->ID);
                 $result = array(
@@ -183,8 +189,8 @@ function crawl_kk_movies_handle($url, $ophim_id, $ophim_update_time, $filterType
         $crawl_settings = json_decode(get_option(CRAWL_KK_OPTION_SETTINGS, false));
         $thumb_image_url = download_resize_thumb($data, $post_id, $crawl_settings);
         $poster_image_url = download_resize_poster($data, $post_id, $crawl_settings);
-        update_post_meta($post_id, 'ophim_thumb_url', $thumb_image_url);
-        update_post_meta($post_id, 'ophim_poster_url', $poster_image_url);
+        save_image_meta($post_id, 'ophim_thumb_url', $thumb_image_url);
+        save_image_meta($post_id, 'ophim_poster_url', $poster_image_url);
 
         $list_episode = get_list_episode($sourcePage, $post_id);
         $result = array(

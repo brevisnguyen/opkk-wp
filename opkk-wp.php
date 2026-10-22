@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OPKK WP
  * Description: OPKK WP — Tương thích dữ liệu oPhim, KKPhim.
- * Version: 1.0.11
+ * Version: 1.0.12
  * Author: Brevis Nguyen
  * Author URI: https://github.com/brevisnguyen/opkk-wp
  */

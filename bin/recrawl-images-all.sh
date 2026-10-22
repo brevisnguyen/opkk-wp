@@ -10,6 +10,7 @@
 #   RUN_AS=user    user chạy PHP (cần chạy bằng sudo). Mặc định: tự lấy owner của từng site
 #                  (aaPanel thường là 'www', Ubuntu/Debian thường là 'www-data')
 #   PHP_BIN=php
+#   SKIP_SITES="a.com,b.com"  bỏ qua các site (tên thư mục site, cách nhau bằng dấu phẩy hoặc dấu cách)
 set -euo pipefail
 
 ROOT="${1:?Usage: $0 <thư mục chứa các site> [--execute] [--limit=N] [--sleep=MS]}"
@@ -18,14 +19,19 @@ EXTRA_ARGS="${*:3}"
 PARALLEL="${PARALLEL:-4}"
 PHP_BIN="${PHP_BIN:-php}"
 RUN_AS="${RUN_AS:-}"
+SKIP_SITES="${SKIP_SITES:-}"
 LOG_DIR="${LOG_DIR:-./recrawl-images-logs-$(date +%Y%m%d-%H%M%S)}"
 mkdir -p "$LOG_DIR"
 
-export MODE EXTRA_ARGS PHP_BIN RUN_AS LOG_DIR OPKK_SKIP_KEY=1
+export MODE EXTRA_ARGS PHP_BIN RUN_AS LOG_DIR SKIP_SITES OPKK_SKIP_KEY=1
 
 run_one() {
   script="$1"
   site="$(echo "$script" | sed -E 's#/wp-content/plugins/opkk-wp/recrawl_missing_images.php$##; s#^.*/##')"
+  if [[ " ${SKIP_SITES//,/ } " == *" $site "* ]]; then
+    echo "[$site] SKIP"
+    return
+  fi
   log="$LOG_DIR/$site.log"
   # shellcheck disable=SC2206
   cmd=("$PHP_BIN" "$script" skip "$MODE" $EXTRA_ARGS)

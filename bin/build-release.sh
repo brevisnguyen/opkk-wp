@@ -9,7 +9,7 @@ SLUG="opkk-wp"
 VERSION="${1:-}"
 
 if [[ -z "$VERSION" ]]; then
-  VERSION="$(grep -E '^\s*\*\s*Version:' "$ROOT/opkk-wp.php" | head -1 | sed -E 's/.*Version:\s*//')"
+  VERSION="$(grep -E '^[[:space:]]*\*[[:space:]]*Version:' "$ROOT/opkk-wp.php" | head -1 | sed -E 's/.*Version:[[:space:]]*//; s/[[:space:]]+$//')"
 fi
 
 if [[ -z "$VERSION" ]]; then
